@@ -1,0 +1,20 @@
+{% load static menu_tags %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Меню{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/menu.css' %}">
+</head>
+<body>
+    <nav>
+        {% draw_menu 'main_menu' %}
+    </nav>
+    <main>
+        {% block content %}
+            <h1>Добро пожаловать!</h1>
+        {% endblock %}
+    </main>
+    <script src="{% static 'js/menu.js' %}"></script>
+</body>
+</html>

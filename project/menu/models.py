@@ -1,9 +1,6 @@
-"""
-Модель для древовидного меню.
-"""
 from django.db import models
 from django.urls import reverse, resolve, Resolver404
-
+from django.core.exceptions import ValidationError
 
 class MenuItem(models.Model):
     """
@@ -66,40 +63,62 @@ class MenuItem(models.Model):
         """
         # Получаем все элементы меню с указанным menu_name
         items = cls.objects.filter(menu_name=menu_name).select_related('parent').order_by('order')
-        # Строим дерево и определяем активные элементы
-        tree = []
-        item_map = {item.id: item for item in items}
-        active_item = None
-
-        # Находим активный элемент по текущему URL
+        
+        # Инициализируем карту элементов и добавляем children_list
+        item_map = {}
         for item in items:
-            try:
-                resolved = resolve(current_url)
-                if item.get_absolute_url() == current_url or item.get_absolute_url() == resolved.url_name:
-                    active_item = item
-            except Resolver404:
-                if item.get_absolute_url() == current_url:
-                    active_item = item
-
-        # Формируем дерево
+            item_map[item.id] = item
+            item.children_list = []  # Явная инициализация children_list для каждого объекта
+        
+        # Находим корневые элементы и строим дерево
+        root_items = []
         for item in items:
-            item.children_list = []
-            item.is_active = item == active_item
+            if item.parent_id is None:
+                root_items.append(item)
+            elif item.parent_id in item_map:
+                item_map[item.parent_id].children_list.append(item)
+            # Инициализируем флаги для всех элементов
+            item.is_active = False
             item.is_ancestor = False
             item.is_child_of_active = False
-            if not item.parent:
-                tree.append(item)
-            else:
-                if item.parent_id in item_map:
-                    item_map[item.parent_id].children_list.append(item)
 
-        # Отмечаем предков активного элемента и их прямых потомков
+        # Определяем активный элемент
+        active_item = None
+        for item in items:
+            if item.get_absolute_url() == current_url:
+                active_item = item
+                break
+            try:
+                resolved = resolve(current_url)
+                if item.get_absolute_url() == current_url or item.get_absolute_url() == f"/{resolved.url_name}/":
+                    active_item = item
+                    break
+            except Resolver404:
+                continue
+
+        # Обновляем флаги для активного элемента и его предков
         if active_item:
             current = active_item
             while current:
+                current.is_active = True
                 current.is_ancestor = True
                 for child in current.children_list:
                     child.is_child_of_active = True
-                current = item_map.get(current.parent_id)
+                if current.parent_id and current.parent_id in item_map:
+                    current = item_map[current.parent_id]
+                else:
+                    break
 
-        return tree
+        return root_items
+
+    def clean(self):
+        if self.parent_id == self.id:
+            raise ValidationError("Пункт меню не может быть родителем самого себя.")
+        # Проверка на циклические зависимости
+        seen = set()
+        current = self.parent
+        while current:
+            if current.id in seen:
+                raise ValidationError("Обнаружена циклическая зависимость в родительских пунктах.")
+            seen.add(current.id)
+            current = current.parent

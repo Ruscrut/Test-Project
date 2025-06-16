@@ -1,0 +1,17 @@
+{% load static %}
+<ul class="menu">
+    {% for item in menu_items %}
+        <li class="{% if item.is_active %}active{% endif %} {% if item.is_ancestor or item.is_child_of_active %}expanded{% endif %}">
+            <a href="{{ item.get_absolute_url }}">{{ item.title }}</a>
+            {% if item.children_list and item.is_ancestor or item.is_child_of_active %}
+                <ul>
+                    {% for child in item.children_list %}
+                        <li class="{% if child.is_active %}active{% endif %}">
+                            <a href="{{ child.get_absolute_url }}">{{ child.title }}</a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
